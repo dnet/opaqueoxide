@@ -1,0 +1,8 @@
+[package]
+name = "opaqueoxide"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+libopaque-sys = { git = "https://github.com/dnet/libopaque-sys" }
+libsodium-sys = "0.2.7"
