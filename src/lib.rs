@@ -1,4 +1,5 @@
 use libopaque_sys as ffi;
+use std::num::TryFromIntError;
 
 use libsodium_sys::{crypto_hash_sha512_BYTES, crypto_scalarmult_SCALARBYTES,
         crypto_auth_hmacsha512_BYTES, crypto_scalarmult_BYTES};
@@ -9,6 +10,12 @@ enum OpaqueError {
     InvalidParameterLength(&'static str),
     Conflict(&'static str),
     LibraryError,
+}
+
+impl From<TryFromIntError> for OpaqueError {
+    fn from(e: TryFromIntError) -> OpaqueError {
+        OpaqueError::InvalidParameterLength("id")
+    }
 }
 
 #[derive(Debug)]
@@ -59,13 +66,13 @@ struct Ids {
 }
 
 impl Ids {
-    unsafe fn to_ffi(&mut self) -> ffi::Opaque_Ids {
-        ffi::Opaque_Ids {
-            idU_len: self.usr.vec.len() as u16,
+    unsafe fn to_ffi(&mut self) -> Result<ffi::Opaque_Ids, TryFromIntError> {
+        Ok(ffi::Opaque_Ids {
+            idU_len: self.usr.vec.len().try_into()?,
             idU: self.usr.vec.as_mut_ptr(),
-            idS_len: self.srv.vec.len() as u16,
+            idS_len: self.srv.vec.len().try_into()?,
             idS: self.srv.vec.as_mut_ptr(),
-        }
+        })
     }
 
     fn to_tuple<'a>(self, ffi_obj: ffi::Opaque_Ids) -> (Vec<u8>, Vec<u8>) {
@@ -100,16 +107,12 @@ impl Id {
     }
 }
 
-impl TryFrom<RecoverConfigValue<'_>> for Id {
-    type Error = OpaqueError;
-
-    fn try_from(rcv: RecoverConfigValue) -> Result<Id, Self::Error> {
+impl From<RecoverConfigValue<'_>> for Id {
+    fn from(rcv: RecoverConfigValue) -> Id {
         match rcv {
             RecoverConfigValue::InSecEnv | RecoverConfigValue::InClrEnv =>
-                Ok(Id::allocate()),
-            RecoverConfigValue::NotPackaged(k) if k.len() > 65535
-                => Err(OpaqueError::InvalidParameterLength("id")),
-            RecoverConfigValue::NotPackaged(k) => Ok(Id::from_user(k)),
+                Id::allocate(),
+            RecoverConfigValue::NotPackaged(k) => Id::from_user(k),
         }
     }
 }
@@ -159,11 +162,11 @@ fn register(user_pwd: &[u8], cfg: &PkgConfig, ids: (&[u8], &[u8]),
         std::ptr::null()
     };
     let mut ids_mut = Ids { usr: Id::from_user(ids.0), srv: Id::from_user(ids.1) };
-    let env_user_len = envelope_len(&cfg, &mut ids_mut);
+    let env_user_len = envelope_len(&cfg, &mut ids_mut)?;
     let mut rec: Vec<u8> = Vec::with_capacity(ffi::OPAQUE_USER_RECORD_LEN + env_user_len);
     let mut export_key: Vec<u8> = Vec::with_capacity(crypto_hash_sha512_BYTES as usize);
     if unsafe { ffi::opaque_Register(user_pwd.as_ptr(), user_pwd.len() as u16,
-            sks_ptr, &cfg.into(), &ids_mut.to_ffi(), rec.as_mut_ptr(),
+            sks_ptr, &cfg.into(), &ids_mut.to_ffi()?, rec.as_mut_ptr(),
             export_key.as_mut_ptr()) } == 0 {
         unsafe {
             rec.set_len(ffi::OPAQUE_USER_RECORD_LEN + env_user_len);
@@ -198,7 +201,7 @@ fn create_credential_response(pub_: &[u8], rec: &[u8], cfg: &PkgConfig,
         return Err(OpaqueError::InvalidParameterLength("pub"));
     }
     let mut ids_mut = Ids { usr: Id::from_user(ids.0), srv: Id::from_user(ids.1) };
-    let env_user_len = envelope_len(&cfg, &mut ids_mut);
+    let env_user_len = envelope_len(&cfg, &mut ids_mut)?;
     if rec.len() != ffi::OPAQUE_USER_RECORD_LEN + env_user_len {
         return Err(OpaqueError::InvalidParameterLength("rec"));
     }
@@ -210,7 +213,7 @@ fn create_credential_response(pub_: &[u8], rec: &[u8], cfg: &PkgConfig,
         panic!("not implemented for now")
     } else { std::ptr::null() };
     if unsafe { ffi::opaque_CreateCredentialResponse(pub_.as_ptr(), rec.as_ptr(),
-            &ids_mut.to_ffi(), infos_ptr, resp.as_mut_ptr(), sk.as_mut_ptr(),
+            &ids_mut.to_ffi()?, infos_ptr, resp.as_mut_ptr(), sk.as_mut_ptr(),
             sec.as_mut_ptr()) } == 0 {
         unsafe {
             resp.set_len(ffi::OPAQUE_SERVER_SESSION_LEN + env_user_len);
@@ -245,13 +248,13 @@ fn recover_credentials(resp: &[u8], sec: &[u8], cfg: &RecoverConfig, infos: Opti
             { return Err(OpaqueError::InvalidParameterLength("pk_srv")); },
         RecoverConfigValue::NotPackaged(k) => k.as_ptr(),
     };
-    let mut ids1 = Ids { usr: cfg.id_usr.try_into()?, srv: cfg.id_srv.try_into()? };
+    let mut ids1 = Ids { usr: cfg.id_usr.into(), srv: cfg.id_srv.into() };
     let infos_ptr: *const ffi::Opaque_App_Infos = if let Some(i) = infos {
         panic!("not implemented for now")
     } else { std::ptr::null() };
     let pcfg: PkgConfig = cfg.into();
     unsafe {
-        let mut ids_ptr = ids1.to_ffi();
+        let mut ids_ptr = ids1.to_ffi()?;
         if ffi::opaque_RecoverCredentials(resp.as_ptr(), sec.as_ptr(),
                     pk_ptr, &(&pcfg).into(), infos_ptr, &mut ids_ptr,
                     sk.as_mut_ptr(), auth_user.as_mut_ptr(),
@@ -267,10 +270,10 @@ fn recover_credentials(resp: &[u8], sec: &[u8], cfg: &RecoverConfig, infos: Opti
 }
 
 
-fn envelope_len(cfg: &PkgConfig, ids: &mut Ids) -> usize {
-    unsafe {
-        ffi::opaque_envelope_len(&cfg.into(), &ids.to_ffi()) as usize
-    }
+fn envelope_len(cfg: &PkgConfig, ids: &mut Ids) -> Result<usize, TryFromIntError> {
+    Ok(unsafe {
+        ffi::opaque_envelope_len(&cfg.into(), &ids.to_ffi()?) as usize
+    })
 }
 
 #[cfg(test)]
