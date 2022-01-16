@@ -94,7 +94,7 @@ impl Id {
     }
 
     fn allocate() -> Id {
-        Id { vec: vec![0u8; 65535], src: IdSource::Allocated }
+        Id { vec: vec![0u8; u16::MAX as usize], src: IdSource::Allocated }
     }
 
     fn as_slice(mut self, length: u16) -> Vec<u8> {
