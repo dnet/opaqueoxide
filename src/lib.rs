@@ -102,6 +102,7 @@ impl Id {
             unsafe {
                 self.vec.set_len(length as usize);
             }
+            self.vec.shrink_to_fit();
         }
         self.vec
     }
