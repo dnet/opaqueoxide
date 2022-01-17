@@ -75,7 +75,7 @@ impl Ids {
         })
     }
 
-    fn to_tuple<'a>(self, ffi_obj: ffi::Opaque_Ids) -> (Vec<u8>, Vec<u8>) {
+    fn to_tuple(self, ffi_obj: ffi::Opaque_Ids) -> (Vec<u8>, Vec<u8>) {
         let usr = self.usr.as_slice(ffi_obj.idU_len);
         let srv = self.srv.as_slice(ffi_obj.idS_len);
         (usr, srv)
