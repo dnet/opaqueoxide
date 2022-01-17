@@ -163,7 +163,7 @@ fn register(user_pwd: &[u8], cfg: &PkgConfig, ids: (&[u8], &[u8]),
         std::ptr::null()
     };
     let mut ids_mut = Ids { usr: Id::from_user(ids.0), srv: Id::from_user(ids.1) };
-    let env_user_len = envelope_len(&cfg, &mut ids_mut)?;
+    let env_user_len = envelope_len(cfg, &mut ids_mut)?;
     let mut rec: Vec<u8> = Vec::with_capacity(ffi::OPAQUE_USER_RECORD_LEN + env_user_len);
     let mut export_key: Vec<u8> = Vec::with_capacity(crypto_hash_sha512_BYTES as usize);
     if unsafe { ffi::opaque_Register(user_pwd.as_ptr(), user_pwd.len() as u16,
@@ -202,7 +202,7 @@ fn create_credential_response(pub_: &[u8], rec: &[u8], cfg: &PkgConfig,
         return Err(OpaqueError::InvalidParameterLength("pub"));
     }
     let mut ids_mut = Ids { usr: Id::from_user(ids.0), srv: Id::from_user(ids.1) };
-    let env_user_len = envelope_len(&cfg, &mut ids_mut)?;
+    let env_user_len = envelope_len(cfg, &mut ids_mut)?;
     if rec.len() != ffi::OPAQUE_USER_RECORD_LEN + env_user_len {
         return Err(OpaqueError::InvalidParameterLength("rec"));
     }
