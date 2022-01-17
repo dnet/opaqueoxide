@@ -66,7 +66,7 @@ struct Ids {
 }
 
 impl Ids {
-    unsafe fn to_ffi(&mut self) -> Result<ffi::Opaque_Ids, TryFromIntError> {
+    unsafe fn to_ffi_mut(&mut self) -> Result<ffi::Opaque_Ids, TryFromIntError> {
         Ok(ffi::Opaque_Ids {
             idU_len: self.usr.vec.len().try_into()?,
             idU: self.usr.vec.as_mut_ptr(),
@@ -75,9 +75,9 @@ impl Ids {
         })
     }
 
-    fn to_tuple(self, ffi_obj: ffi::Opaque_Ids) -> (Vec<u8>, Vec<u8>) {
-        let usr = self.usr.as_slice(ffi_obj.idU_len);
-        let srv = self.srv.as_slice(ffi_obj.idS_len);
+    fn into_tuple(self, ffi_obj: ffi::Opaque_Ids) -> (Vec<u8>, Vec<u8>) {
+        let usr = self.usr.drain_vec(ffi_obj.idU_len);
+        let srv = self.srv.drain_vec(ffi_obj.idS_len);
         (usr, srv)
     }
 }
@@ -97,7 +97,7 @@ impl Id {
         Id { vec: vec![0u8; u16::MAX as usize], src: IdSource::Allocated }
     }
 
-    fn as_slice(mut self, length: u16) -> Vec<u8> {
+    fn drain_vec(mut self, length: u16) -> Vec<u8> {
         if self.src == IdSource::Allocated {
             unsafe {
                 self.vec.set_len(length as usize);
@@ -167,7 +167,7 @@ fn register(user_pwd: &[u8], cfg: &PkgConfig, ids: (&[u8], &[u8]),
     let mut rec: Vec<u8> = Vec::with_capacity(ffi::OPAQUE_USER_RECORD_LEN + env_user_len);
     let mut export_key: Vec<u8> = Vec::with_capacity(crypto_hash_sha512_BYTES as usize);
     if unsafe { ffi::opaque_Register(user_pwd.as_ptr(), user_pwd.len() as u16,
-            sks_ptr, &cfg.into(), &ids_mut.to_ffi()?, rec.as_mut_ptr(),
+            sks_ptr, &cfg.into(), &ids_mut.to_ffi_mut()?, rec.as_mut_ptr(),
             export_key.as_mut_ptr()) } == 0 {
         unsafe {
             rec.set_len(ffi::OPAQUE_USER_RECORD_LEN + env_user_len);
@@ -214,7 +214,7 @@ fn create_credential_response(pub_: &[u8], rec: &[u8], cfg: &PkgConfig,
         panic!("not implemented for now")
     } else { std::ptr::null() };
     if unsafe { ffi::opaque_CreateCredentialResponse(pub_.as_ptr(), rec.as_ptr(),
-            &ids_mut.to_ffi()?, infos_ptr, resp.as_mut_ptr(), sk.as_mut_ptr(),
+            &ids_mut.to_ffi_mut()?, infos_ptr, resp.as_mut_ptr(), sk.as_mut_ptr(),
             sec.as_mut_ptr()) } == 0 {
         unsafe {
             resp.set_len(ffi::OPAQUE_SERVER_SESSION_LEN + env_user_len);
@@ -255,7 +255,7 @@ fn recover_credentials(resp: &[u8], sec: &[u8], cfg: &RecoverConfig, infos: Opti
     } else { std::ptr::null() };
     let pcfg: PkgConfig = cfg.into();
     unsafe {
-        let mut ids_ptr = ids1.to_ffi()?;
+        let mut ids_ptr = ids1.to_ffi_mut()?;
         if ffi::opaque_RecoverCredentials(resp.as_ptr(), sec.as_ptr(),
                     pk_ptr, &(&pcfg).into(), infos_ptr, &mut ids_ptr,
                     sk.as_mut_ptr(), auth_user.as_mut_ptr(),
@@ -263,7 +263,7 @@ fn recover_credentials(resp: &[u8], sec: &[u8], cfg: &RecoverConfig, infos: Opti
             sk.set_len(ffi::OPAQUE_SHARED_SECRETBYTES);
             auth_user.set_len(crypto_auth_hmacsha512_BYTES as usize);
             export_key.set_len(crypto_hash_sha512_BYTES as usize);
-            Ok((sk, auth_user, export_key, ids1.to_tuple(ids_ptr)))
+            Ok((sk, auth_user, export_key, ids1.into_tuple(ids_ptr)))
         } else {
             Err(OpaqueError::LibraryError)
         }
@@ -273,7 +273,7 @@ fn recover_credentials(resp: &[u8], sec: &[u8], cfg: &RecoverConfig, infos: Opti
 
 fn envelope_len(cfg: &PkgConfig, ids: &mut Ids) -> Result<usize, TryFromIntError> {
     Ok(unsafe {
-        ffi::opaque_envelope_len(&cfg.into(), &ids.to_ffi()?) as usize
+        ffi::opaque_envelope_len(&cfg.into(), &ids.to_ffi_mut()?) as usize
     })
 }
 
