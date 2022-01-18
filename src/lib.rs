@@ -270,6 +270,20 @@ fn recover_credentials(resp: &[u8], sec: &[u8], cfg: &RecoverConfig, infos: Opti
     }
 }
 
+fn user_auth(sec_srv: &[u8], auth_user: &[u8]) -> Result<(), OpaqueError> {
+    if sec_srv.len() != ffi::opaque_server_auth_ctx_len() {
+        return Err(OpaqueError::InvalidParameterLength("sec_srv"));
+    }
+    if auth_user.len() != crypto_auth_hmacsha512_BYTES as usize {
+        return Err(OpaqueError::InvalidParameterLength("auth_user"));
+    }
+    if (unsafe { ffi::opaque_UserAuth(sec_srv.as_ptr(),
+                                             auth_user.as_ptr()) } == 0) {
+        Ok(())
+    } else {
+        Err(OpaqueError::LibraryError)
+    }
+}
 
 fn envelope_len(cfg: &PkgConfig, ids: &mut Ids) -> Result<usize, TryFromIntError> {
     Ok(unsafe {
@@ -306,5 +320,12 @@ mod tests {
 
         let (sk1, auth_user, export_key1, ids1) = recover_credentials(
             &resp, &sec_user, &recfg, None).expect("recover");
+
+        user_auth(&sec_srv, &auth_user).expect("user_auth");
+
+        assert_eq!(ids.0, ids1.0);
+        assert_eq!(ids.1, ids1.1);
+        assert_eq!(export_key, export_key1);
+        assert_eq!(sk, sk1);
     }
 }
