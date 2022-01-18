@@ -2,7 +2,8 @@ use libopaque_sys as ffi;
 use std::num::TryFromIntError;
 
 use libsodium_sys::{crypto_hash_sha512_BYTES, crypto_scalarmult_SCALARBYTES,
-        crypto_auth_hmacsha512_BYTES, crypto_scalarmult_BYTES};
+        crypto_auth_hmacsha512_BYTES, crypto_scalarmult_BYTES,
+        crypto_core_ristretto255_BYTES};
 
 #[derive(Debug)]
 enum OpaqueError {
@@ -285,6 +286,74 @@ fn user_auth(sec_srv: &[u8], auth_user: &[u8]) -> Result<(), OpaqueError> {
     }
 }
 
+fn create_registration_request(user_pwd: &[u8]) -> Result<(Vec<u8>, Vec<u8>), OpaqueError> {
+    if user_pwd.is_empty() { return Err(OpaqueError::EmptyPassword) };
+    let mut sec: Vec<u8> = Vec::with_capacity(
+        ffi::OPAQUE_REGISTER_USER_SEC_LEN + user_pwd.len());
+    let mut m: Vec<u8> = Vec::with_capacity(
+        crypto_core_ristretto255_BYTES as usize);
+    unsafe {
+        ffi::opaque_CreateRegistrationRequest(user_pwd.as_ptr(),
+                                              user_pwd.len() as u16,
+                                              sec.as_mut_ptr(), m.as_mut_ptr());
+        sec.set_len(ffi::OPAQUE_REGISTER_USER_SEC_LEN + user_pwd.len());
+        m.set_len(crypto_core_ristretto255_BYTES as usize);
+    }
+    Ok((sec, m))
+}
+
+fn create_registration_response(m: &[u8], pk_srv: Option<&[u8]>) -> Result<(Vec<u8>, Vec<u8>), OpaqueError> {
+    if m.len() != crypto_core_ristretto255_BYTES as usize {
+        return Err(OpaqueError::InvalidParameterLength("m"));
+    }
+    let mut sec:  Vec<u8> = Vec::with_capacity(ffi::OPAQUE_REGISTER_SECRET_LEN);
+    let mut pub_: Vec<u8> = Vec::with_capacity(ffi::OPAQUE_REGISTER_PUBLIC_LEN);
+    let result =  unsafe {
+        if let Some(k) = pk_srv {
+            ffi::opaque_Create1kRegistrationResponse(
+                m.as_ptr(), k.as_ptr(), sec.as_mut_ptr(), pub_.as_mut_ptr())
+        } else {
+            ffi::opaque_CreateRegistrationResponse(
+                m.as_ptr(),             sec.as_mut_ptr(), pub_.as_mut_ptr())
+        }};
+    if result == 0 {
+        unsafe {
+            sec.set_len(ffi::OPAQUE_REGISTER_SECRET_LEN);
+            pub_.set_len(ffi::OPAQUE_REGISTER_PUBLIC_LEN);
+        }
+        Ok((sec, pub_))
+    } else {
+        Err(OpaqueError::LibraryError)
+    }
+}
+
+fn finalize_request(sec: &[u8], pub_: &[u8], cfg: &PkgConfig,
+                    ids: (&[u8], &[u8])) -> Result<(Vec<u8>, Vec<u8>), OpaqueError> {
+    if sec.len() <= ffi::OPAQUE_REGISTER_USER_SEC_LEN {
+        return Err(OpaqueError::InvalidParameterLength("sec"));
+    }
+    if pub_.len() != ffi::OPAQUE_REGISTER_PUBLIC_LEN {
+        return Err(OpaqueError::InvalidParameterLength("pub"));
+    }
+    let mut ids_mut = Ids { usr: Id::from_user(ids.0), srv: Id::from_user(ids.1) };
+    let env_user_len = envelope_len(cfg, &mut ids_mut)?;
+    let mut rec: Vec<u8> = Vec::with_capacity(ffi::OPAQUE_USER_RECORD_LEN +
+                                              env_user_len);
+    let mut export_key: Vec<u8> = Vec::with_capacity(
+        crypto_hash_sha512_BYTES as usize);
+    unsafe {
+        if ffi::opaque_FinalizeRequest(
+            sec.as_ptr(), pub_.as_ptr(), &cfg.into(), &ids_mut.to_ffi_mut()?,
+            rec.as_mut_ptr(), export_key.as_mut_ptr()) == 0 {
+            rec.set_len(ffi::OPAQUE_USER_RECORD_LEN + env_user_len);
+            export_key.set_len(crypto_hash_sha512_BYTES as usize);
+            Ok((rec, export_key))
+        } else {
+            Err(OpaqueError::LibraryError)
+        }
+    }
+}
+
 fn envelope_len(cfg: &PkgConfig, ids: &mut Ids) -> Result<usize, TryFromIntError> {
     Ok(unsafe {
         ffi::opaque_envelope_len(&cfg.into(), &ids.to_ffi_mut()?) as usize
@@ -327,5 +396,10 @@ mod tests {
         assert_eq!(ids.1, ids1.1);
         assert_eq!(export_key, export_key1);
         assert_eq!(sk, sk1);
+
+        let (sec_usr, m) = create_registration_request(user_pwd).expect("crrq");
+        let (sec_srv, pub_) = create_registration_response(&m, None).expect("crrs");
+        let (rec, export_key) = finalize_request(&sec_usr, &pub_, &cfg, ids).expect("fr");
+
     }
 }
