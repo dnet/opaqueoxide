@@ -298,16 +298,16 @@ mod tests {
 
     #[test]
     fn simple() {
-        let pwd_user = b"simple guessable dictionary password";
+        let user_pwd = b"simple guessable dictionary password";
         let ids = ("user".as_bytes(), "server".as_bytes());
         let cfg = PkgConfig {
             sk_usr: PkgConfigValue::InSecEnv,
             pk_usr: PkgConfigValue::InSecEnv, pk_srv: PkgConfigValue::InSecEnv,
             id_usr: PkgConfigValue::InSecEnv, id_srv: PkgConfigValue::InSecEnv,
         };
-        let (rec, export_key) = register(pwd_user, &cfg, ids, None).expect("register");
+        let (rec, export_key) = register(user_pwd, &cfg, ids, None).expect("register");
         
-        let (pub_, sec_user) = create_credential_request(pwd_user).expect("ccreq");
+        let (pub_, sec_user) = create_credential_request(user_pwd).expect("ccreq");
 
         let (resp, sk, sec_srv) = create_credential_response(&pub_, &rec, &cfg, ids, None).expect("ccresp");
 
