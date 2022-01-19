@@ -375,7 +375,7 @@ mod tests {
             id_usr: PkgConfigValue::InSecEnv, id_srv: PkgConfigValue::InSecEnv,
         };
         let (rec, export_key) = register(user_pwd, &cfg, ids, None).expect("register");
-        
+    
         let (pub_, sec_user) = create_credential_request(user_pwd).expect("ccreq");
 
         let (resp, sk, sec_srv) = create_credential_response(&pub_, &rec, &cfg, ids, None).expect("ccresp");
