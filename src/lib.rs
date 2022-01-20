@@ -332,6 +332,29 @@ fn finalize_request(sec: &[u8], pub_: &[u8], cfg: &PkgConfig,
     }
 }
 
+fn store_user_record(sec: &[u8], rec: &[u8], sk_srv: Option<&[u8]>) -> Result<Vec<u8>, OpaqueError> {
+    if sec.len() != ffi::OPAQUE_REGISTER_SECRET_LEN {
+        return Err(OpaqueError::InvalidParameterLength("sec"));
+    }
+    if rec.len() <= ffi::OPAQUE_USER_RECORD_LEN {
+        return Err(OpaqueError::InvalidParameterLength("Rec"));
+    }
+    let mut rec = rec.to_vec();
+    unsafe {
+        if let Some(k) = sk_srv {
+            if k.len() != crypto_scalarmult_SCALARBYTES as usize {
+                return Err(OpaqueError::InvalidParameterLength("sk_srv"));
+            }
+            ffi::opaque_Store1kUserRecord(
+                sec.as_ptr(), k.as_ptr(), rec.as_mut_ptr());
+        } else {
+            ffi::opaque_StoreUserRecord(
+                sec.as_ptr(),             rec.as_mut_ptr());
+        }
+    }
+    Ok(rec)
+}
+
 fn envelope_len(cfg: &PkgConfig, ids: &mut Ids) -> Result<usize, TryFromIntError> {
     Ok(unsafe {
         ffi::opaque_envelope_len(&cfg.into(), &ids.to_ffi_mut()?) as usize
@@ -384,6 +407,6 @@ mod tests {
         let (sec_usr, m) = create_registration_request(user_pwd).expect("crrq");
         let (sec_srv, pub_) = create_registration_response(&m, None).expect("crrs");
         let (rec, export_key) = finalize_request(&sec_usr, &pub_, &cfg, ids).expect("fr");
-
+        let rec = store_user_record(&sec_srv, &rec, None).expect("sur");
     }
 }
