@@ -277,10 +277,14 @@ fn create_registration_request(user_pwd: &[u8]) -> Result<(Vec<u8>, Vec<u8>), Op
     unsafe {
         let mut sec = vec_for_ffi(ffi::OPAQUE_REGISTER_USER_SEC_LEN + user_pwd.len());
         let mut m = vec_for_ffi(crypto_core_ristretto255_BYTES as usize);
-        ffi::opaque_CreateRegistrationRequest(user_pwd.as_ptr(),
-                                              user_pwd.len() as u16,
-                                              sec.as_mut_ptr(), m.as_mut_ptr());
-        Ok((sec, m))
+        if ffi::opaque_CreateRegistrationRequest(user_pwd.as_ptr(),
+                                                 user_pwd.len() as u16,
+                                                 sec.as_mut_ptr(),
+                                                 m.as_mut_ptr()) == 0 {
+            Ok((sec, m))
+        } else {
+            Err(OpaqueError::LibraryError)
+        }
     }
 }
 
