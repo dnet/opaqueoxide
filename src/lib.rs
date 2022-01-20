@@ -292,6 +292,9 @@ fn create_registration_response(m: &[u8], pk_srv: Option<&[u8]>) -> Result<(Vec<
         let mut sec  = vec_for_ffi(ffi::OPAQUE_REGISTER_SECRET_LEN);
         let mut pub_ = vec_for_ffi(ffi::OPAQUE_REGISTER_PUBLIC_LEN);
         let result = if let Some(k) = pk_srv {
+            if k.len() != crypto_scalarmult_BYTES as usize {
+                return Err(OpaqueError::InvalidParameterLength("pk_srv"));
+            }
             ffi::opaque_Create1kRegistrationResponse(
                 m.as_ptr(), k.as_ptr(), sec.as_mut_ptr(), pub_.as_mut_ptr())
         } else {
