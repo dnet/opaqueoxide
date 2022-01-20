@@ -16,7 +16,7 @@ enum OpaqueError {
 }
 
 impl From<TryFromIntError> for OpaqueError {
-    fn from(e: TryFromIntError) -> OpaqueError {
+    fn from(_: TryFromIntError) -> OpaqueError {
         OpaqueError::InvalidParameterLength("id")
     }
 }
