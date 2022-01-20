@@ -1,11 +1,9 @@
 use libopaque_sys as ffi;
 use std::num::TryFromIntError;
-use core::ffi::c_void;
 
 use libsodium_sys::{crypto_hash_sha512_BYTES, crypto_scalarmult_SCALARBYTES,
         crypto_auth_hmacsha512_BYTES, crypto_scalarmult_BYTES,
-        crypto_core_ristretto255_BYTES, crypto_scalarmult_curve25519_base,
-        randombytes_buf};
+        crypto_core_ristretto255_BYTES};
 
 #[derive(Debug)]
 enum OpaqueError {
@@ -425,6 +423,9 @@ mod tests {
 
     #[test]
     fn register_with_global_server_key() {
+        use libsodium_sys::{crypto_scalarmult_curve25519_base, randombytes_buf};
+        use core::ffi::c_void;
+
         let np = PkgConfigValue::NotPackaged;
         let cfg = PkgConfig {
             sk_usr: np, pk_usr: np, pk_srv: np, id_usr: np, id_srv: np,
