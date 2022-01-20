@@ -6,7 +6,7 @@ use libsodium_sys::{crypto_hash_sha512_BYTES, crypto_scalarmult_SCALARBYTES,
         crypto_core_ristretto255_BYTES};
 
 #[derive(Debug)]
-enum OpaqueError {
+pub enum OpaqueError {
     EmptyPassword,
     InvalidParameterLength(&'static str),
     Conflict(&'static str),
@@ -20,7 +20,7 @@ impl From<TryFromIntError> for OpaqueError {
 }
 
 #[derive(Debug)]
-struct PkgConfig {
+pub struct PkgConfig {
     sk_usr: PkgConfigValue,
     pk_usr: PkgConfigValue,
     pk_srv: PkgConfigValue,
@@ -52,7 +52,7 @@ impl From<&RecoverConfig<'_>> for PkgConfig {
 }
 
 #[derive(Debug)]
-struct RecoverConfig<'a> {
+pub struct RecoverConfig<'a> {
     sk_usr: PkgConfigValue,
     pk_usr: PkgConfigValue,
     pk_srv: RecoverConfigValue<'a>,
@@ -127,7 +127,7 @@ enum IdSource {
 
 #[repr(u8)]
 #[derive(Debug, Copy, Clone, PartialEq)]
-enum PkgConfigValue {
+pub enum PkgConfigValue {
     NotPackaged = ffi::Opaque_PkgTarget_NotPackaged,
     InSecEnv = ffi::Opaque_PkgTarget_InSecEnv,
     InClrEnv = ffi::Opaque_PkgTarget_InClrEnv,
@@ -145,13 +145,13 @@ impl From<RecoverConfigValue<'_>> for PkgConfigValue {
 
 #[repr(u8)]
 #[derive(Debug, Copy, Clone, PartialEq)]
-enum RecoverConfigValue<'a> {
+pub enum RecoverConfigValue<'a> {
     NotPackaged(&'a [u8]),
     InSecEnv,
     InClrEnv,
 }
 
-fn register(user_pwd: &[u8], cfg: &PkgConfig, ids: (&[u8], &[u8]),
+pub fn register(user_pwd: &[u8], cfg: &PkgConfig, ids: (&[u8], &[u8]),
             server_keys: Option<&[u8]>) -> Result<(Vec<u8>, Vec<u8>), OpaqueError> {
     if user_pwd.is_empty() { return Err(OpaqueError::EmptyPassword) };
     let sks_ptr = if let Some(sks) = server_keys {
@@ -178,7 +178,7 @@ fn register(user_pwd: &[u8], cfg: &PkgConfig, ids: (&[u8], &[u8]),
     }
 }
 
-fn create_credential_request(user_pwd: &[u8]) -> Result<(Vec<u8>, Vec<u8>), OpaqueError> {
+pub fn create_credential_request(user_pwd: &[u8]) -> Result<(Vec<u8>, Vec<u8>), OpaqueError> {
     if user_pwd.is_empty() { return Err(OpaqueError::EmptyPassword) };
     unsafe {
         let mut sec  = vec_for_ffi(ffi::OPAQUE_USER_SESSION_SECRET_LEN + user_pwd.len());
@@ -191,7 +191,7 @@ fn create_credential_request(user_pwd: &[u8]) -> Result<(Vec<u8>, Vec<u8>), Opaq
     }
 }
 
-fn create_credential_response(pub_: &[u8], rec: &[u8], cfg: &PkgConfig,
+pub fn create_credential_response(pub_: &[u8], rec: &[u8], cfg: &PkgConfig,
                               ids: (&[u8], &[u8]), infos: Option<()>
                               ) -> Result<(Vec<u8>, Vec<u8>, Vec<u8>), OpaqueError> {
     if pub_.len() != ffi::OPAQUE_USER_SESSION_PUBLIC_LEN as usize {
@@ -219,7 +219,7 @@ fn create_credential_response(pub_: &[u8], rec: &[u8], cfg: &PkgConfig,
     }
 }
 
-fn recover_credentials(resp: &[u8], sec: &[u8], cfg: &RecoverConfig, infos: Option<()>,
+pub fn recover_credentials(resp: &[u8], sec: &[u8], cfg: &RecoverConfig, infos: Option<()>,
                        ) -> Result<(Vec<u8>, Vec<u8>, Vec<u8>, (Vec<u8>, Vec<u8>)),
                                    OpaqueError> {
     if resp.len() <= ffi::OPAQUE_SERVER_SESSION_LEN {
@@ -257,7 +257,7 @@ fn recover_credentials(resp: &[u8], sec: &[u8], cfg: &RecoverConfig, infos: Opti
     }
 }
 
-fn user_auth(sec_srv: &[u8], auth_user: &[u8]) -> Result<(), OpaqueError> {
+pub fn user_auth(sec_srv: &[u8], auth_user: &[u8]) -> Result<(), OpaqueError> {
     if sec_srv.len() != ffi::opaque_server_auth_ctx_len() {
         return Err(OpaqueError::InvalidParameterLength("sec_srv"));
     }
@@ -272,7 +272,7 @@ fn user_auth(sec_srv: &[u8], auth_user: &[u8]) -> Result<(), OpaqueError> {
     }
 }
 
-fn create_registration_request(user_pwd: &[u8]) -> Result<(Vec<u8>, Vec<u8>), OpaqueError> {
+pub fn create_registration_request(user_pwd: &[u8]) -> Result<(Vec<u8>, Vec<u8>), OpaqueError> {
     if user_pwd.is_empty() { return Err(OpaqueError::EmptyPassword) };
     unsafe {
         let mut sec = vec_for_ffi(ffi::OPAQUE_REGISTER_USER_SEC_LEN + user_pwd.len());
@@ -288,7 +288,7 @@ fn create_registration_request(user_pwd: &[u8]) -> Result<(Vec<u8>, Vec<u8>), Op
     }
 }
 
-fn create_registration_response(m: &[u8], pk_srv: Option<&[u8]>) -> Result<(Vec<u8>, Vec<u8>), OpaqueError> {
+pub fn create_registration_response(m: &[u8], pk_srv: Option<&[u8]>) -> Result<(Vec<u8>, Vec<u8>), OpaqueError> {
     if m.len() != crypto_core_ristretto255_BYTES as usize {
         return Err(OpaqueError::InvalidParameterLength("m"));
     }
@@ -313,7 +313,7 @@ fn create_registration_response(m: &[u8], pk_srv: Option<&[u8]>) -> Result<(Vec<
     }
 }
 
-fn finalize_request(sec: &[u8], pub_: &[u8], cfg: &PkgConfig,
+pub fn finalize_request(sec: &[u8], pub_: &[u8], cfg: &PkgConfig,
                     ids: (&[u8], &[u8])) -> Result<(Vec<u8>, Vec<u8>), OpaqueError> {
     if sec.len() <= ffi::OPAQUE_REGISTER_USER_SEC_LEN {
         return Err(OpaqueError::InvalidParameterLength("sec"));
@@ -336,7 +336,7 @@ fn finalize_request(sec: &[u8], pub_: &[u8], cfg: &PkgConfig,
     }
 }
 
-fn store_user_record(sec: &[u8], rec: &[u8], sk_srv: Option<&[u8]>) -> Result<Vec<u8>, OpaqueError> {
+pub fn store_user_record(sec: &[u8], rec: &[u8], sk_srv: Option<&[u8]>) -> Result<Vec<u8>, OpaqueError> {
     if sec.len() != ffi::OPAQUE_REGISTER_SECRET_LEN {
         return Err(OpaqueError::InvalidParameterLength("sec"));
     }
