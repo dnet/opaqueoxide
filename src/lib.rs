@@ -34,9 +34,9 @@ impl From<&PkgConfig> for ffi::Opaque_PkgConfig {
     fn from(pc: &PkgConfig) -> ffi::Opaque_PkgConfig {
         ffi::Opaque_PkgConfig {
             _bitfield_1: ffi::Opaque_PkgConfig::new_bitfield_1(
-                *(&pc.sk_usr) as u8,
-                *(&pc.pk_usr) as u8, *(&pc.pk_srv) as u8,
-                *(&pc.id_usr) as u8, *(&pc.id_srv) as u8)
+                pc.sk_usr as u8,
+                pc.pk_usr as u8, pc.pk_srv as u8,
+                pc.id_usr as u8, pc.id_srv as u8)
         }
     }
 }
