@@ -1,9 +1,11 @@
 use libopaque_sys as ffi;
 use std::num::TryFromIntError;
+use core::ffi::c_void;
 
 use libsodium_sys::{crypto_hash_sha512_BYTES, crypto_scalarmult_SCALARBYTES,
         crypto_auth_hmacsha512_BYTES, crypto_scalarmult_BYTES,
-        crypto_core_ristretto255_BYTES};
+        crypto_core_ristretto255_BYTES, crypto_scalarmult_curve25519_base,
+        randombytes_buf};
 
 #[derive(Debug)]
 enum OpaqueError {
@@ -413,6 +415,46 @@ mod tests {
             &pub_, &rec, &cfg, ids, None).expect("ccresp");
         let (sk1, auth_user, export_key1, ids1) = recover_credentials(
             &resp, &sec_user, &recfg, None).expect("recover");
+        user_auth(&sec_srv, &auth_user).expect("user_auth");
+
+        assert_eq!(ids.0, ids1.0);
+        assert_eq!(ids.1, ids1.1);
+        assert_eq!(export_key, export_key1);
+        assert_eq!(sk, sk1);
+    }
+
+    #[test]
+    fn register_with_global_server_key() {
+        let np = PkgConfigValue::NotPackaged;
+        let cfg = PkgConfig {
+            sk_usr: np, pk_usr: np, pk_srv: np, id_usr: np, id_srv: np,
+        };
+        let ids = ("user".as_bytes(), "server".as_bytes());
+        let (sk_srv, pk_srv) = unsafe {
+            let mut sk_srv = [0u8; crypto_scalarmult_SCALARBYTES as usize];
+            let mut pk_srv = [0u8; crypto_scalarmult_BYTES as usize];
+            randombytes_buf(sk_srv.as_mut_ptr() as *mut c_void, sk_srv.len());
+            crypto_scalarmult_curve25519_base(pk_srv.as_mut_ptr(), sk_srv.as_ptr());
+            (sk_srv, pk_srv)
+        };
+        let (sec_usr, m) = create_registration_request(USER_PWD).expect("crrq");
+        let (sec_srv, pub_) = create_registration_response(&m, Some(&pk_srv)).expect("crrs");
+        let (rec, export_key) = finalize_request(
+            &sec_usr, &pub_, &cfg, ids).expect("fr");
+        let rec = store_user_record(&sec_srv, &rec, Some(&sk_srv)).expect("sur");
+        let (pub_, sec_usr) = create_credential_request(USER_PWD).expect("ccreq");
+        let (resp, sk, sec_srv) = create_credential_response(
+            &pub_, &rec, &cfg, ids, None).expect("ccresp");
+
+        let recfg = RecoverConfig {
+            sk_usr: cfg.sk_usr, pk_usr: cfg.pk_usr,
+            pk_srv: RecoverConfigValue::NotPackaged(&pk_srv),
+            id_usr: RecoverConfigValue::NotPackaged(ids.0),
+            id_srv: RecoverConfigValue::NotPackaged(ids.1),
+        };
+
+        let (sk1, auth_user, export_key1, ids1) = recover_credentials(
+            &resp, &sec_usr, &recfg, None).expect("recover");
         user_auth(&sec_srv, &auth_user).expect("user_auth");
 
         assert_eq!(ids.0, ids1.0);
