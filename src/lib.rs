@@ -372,18 +372,19 @@ mod tests {
 
     use crate::*;
 
+    const USER_PWD: &[u8; 36] = b"simple guessable dictionary password";
+
     #[test]
     fn simple() {
-        let user_pwd = b"simple guessable dictionary password";
         let ids = ("user".as_bytes(), "server".as_bytes());
         let cfg = PkgConfig {
             sk_usr: PkgConfigValue::InSecEnv,
             pk_usr: PkgConfigValue::InSecEnv, pk_srv: PkgConfigValue::InSecEnv,
             id_usr: PkgConfigValue::InSecEnv, id_srv: PkgConfigValue::InSecEnv,
         };
-        let (rec, export_key) = register(user_pwd, &cfg, ids, None).expect("register");
+        let (rec, export_key) = register(USER_PWD, &cfg, ids, None).expect("register");
     
-        let (pub_, sec_user) = create_credential_request(user_pwd).expect("ccreq");
+        let (pub_, sec_user) = create_credential_request(USER_PWD).expect("ccreq");
 
         let (resp, sk, sec_srv) = create_credential_response(&pub_, &rec, &cfg, ids, None).expect("ccresp");
 
@@ -404,12 +405,12 @@ mod tests {
         assert_eq!(export_key, export_key1);
         assert_eq!(sk, sk1);
 
-        let (sec_usr, m) = create_registration_request(user_pwd).expect("crrq");
+        let (sec_usr, m) = create_registration_request(USER_PWD).expect("crrq");
         let (sec_srv, pub_) = create_registration_response(&m, None).expect("crrs");
         let (rec, export_key) = finalize_request(
             &sec_usr, &pub_, &cfg, ids).expect("fr");
         let rec = store_user_record(&sec_srv, &rec, None).expect("sur");
-        let (pub_, sec_usr) = create_credential_request(user_pwd).expect("ccreq");
+        let (pub_, sec_usr) = create_credential_request(USER_PWD).expect("ccreq");
         let (resp, sk, sec_srv) = create_credential_response(
             &pub_, &rec, &cfg, ids, None).expect("ccresp");
         let (sk1, auth_user, export_key1, ids1) = recover_credentials(
