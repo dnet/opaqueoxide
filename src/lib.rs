@@ -406,7 +406,8 @@ mod tests {
 
         let (sec_usr, m) = create_registration_request(user_pwd).expect("crrq");
         let (sec_srv, pub_) = create_registration_response(&m, None).expect("crrs");
-        let (rec, export_key) = finalize_request(&sec_usr, &pub_, &cfg, ids).expect("fr");
+        let (rec, export_key) = finalize_request(
+            &sec_usr, &pub_, &cfg, ids).expect("fr");
         let rec = store_user_record(&sec_srv, &rec, None).expect("sur");
     }
 }
