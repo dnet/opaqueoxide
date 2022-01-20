@@ -377,10 +377,9 @@ mod tests {
     #[test]
     fn simple() {
         let ids = ("user".as_bytes(), "server".as_bytes());
+        let ise = PkgConfigValue::InSecEnv;
         let cfg = PkgConfig {
-            sk_usr: PkgConfigValue::InSecEnv,
-            pk_usr: PkgConfigValue::InSecEnv, pk_srv: PkgConfigValue::InSecEnv,
-            id_usr: PkgConfigValue::InSecEnv, id_srv: PkgConfigValue::InSecEnv,
+            sk_usr: ise, pk_usr: ise, pk_srv: ise, id_usr: ise, id_srv: ise,
         };
         let (rec, export_key) = register(USER_PWD, &cfg, ids, None).expect("register");
     
@@ -388,11 +387,10 @@ mod tests {
 
         let (resp, sk, sec_srv) = create_credential_response(&pub_, &rec, &cfg, ids, None).expect("ccresp");
 
+        let ise = RecoverConfigValue::InSecEnv;
         let recfg = RecoverConfig {
             sk_usr: cfg.sk_usr, pk_usr: cfg.pk_usr,
-            pk_srv: RecoverConfigValue::InSecEnv,
-            id_usr: RecoverConfigValue::InSecEnv,
-            id_srv: RecoverConfigValue::InSecEnv,
+            pk_srv: ise, id_usr: ise, id_srv: ise,
         };
 
         let (sk1, auth_user, export_key1, ids1) = recover_credentials(
