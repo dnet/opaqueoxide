@@ -245,7 +245,7 @@ pub fn recover_credentials(resp: &[u8], sec: &[u8], cfg: &RecoverConfig, infos: 
         let mut sk = vec_for_ffi(ffi::OPAQUE_SHARED_SECRETBYTES);
         let mut auth_user = vec_for_ffi(crypto_auth_hmacsha512_BYTES as usize);
         let mut export_key = vec_for_ffi(crypto_hash_sha512_BYTES as usize);
-            let mut ids_ptr = ids1.to_ffi_mut()?;
+        let mut ids_ptr = ids1.to_ffi_mut()?;
         if ffi::opaque_RecoverCredentials(resp.as_ptr(), sec.as_ptr(),
                     pk_ptr, &(&pcfg).into(), infos_ptr, &mut ids_ptr,
                     sk.as_mut_ptr(), auth_user.as_mut_ptr(),
@@ -265,7 +265,7 @@ pub fn user_auth(sec_srv: &[u8], auth_user: &[u8]) -> Result<(), OpaqueError> {
         return Err(OpaqueError::InvalidParameterLength("auth_user"));
     }
     if (unsafe { ffi::opaque_UserAuth(sec_srv.as_ptr(),
-                                             auth_user.as_ptr()) } == 0) {
+                                      auth_user.as_ptr()) } == 0) {
         Ok(())
     } else {
         Err(OpaqueError::LibraryError)
