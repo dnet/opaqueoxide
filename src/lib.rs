@@ -412,7 +412,7 @@ mod tests {
         let (rec, export_key) = finalize_request(
             &sec_usr, &pub_, &cfg, ids).expect("fr");
         let rec = store_user_record(&sec_srv, &rec, None).expect("sur");
-        let (pub_, sec_usr) = create_credential_request(USER_PWD).expect("ccreq");
+        let (pub_, sec_user) = create_credential_request(USER_PWD).expect("ccreq");
         let (resp, sk, sec_srv) = create_credential_response(
             &pub_, &rec, &cfg, ids, None).expect("ccresp");
         let (sk1, auth_user, export_key1, ids1) = recover_credentials(
