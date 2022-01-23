@@ -151,8 +151,16 @@ pub enum RecoverConfigValue<'a> {
     InClrEnv,
 }
 
+pub type SessionPublic = [u8; ffi::OPAQUE_USER_SESSION_PUBLIC_LEN];
+pub type OpaqueSharedSecret = [u8; ffi::OPAQUE_SHARED_SECRETBYTES];
+pub type HmacSha512 = [u8; crypto_auth_hmacsha512_BYTES as usize];
+pub type Sha512 = [u8; crypto_hash_sha512_BYTES as usize];
+pub type RegistrationRequestM = [u8; crypto_core_ristretto255_BYTES as usize];
+pub type RegisterSecret = [u8; ffi::OPAQUE_REGISTER_SECRET_LEN];
+pub type RegisterPublic = [u8; ffi::OPAQUE_REGISTER_PUBLIC_LEN];
+
 pub fn register(user_pwd: &[u8], cfg: &PkgConfig, ids: (&[u8], &[u8]),
-            server_keys: Option<&[u8]>) -> Result<(Vec<u8>, Vec<u8>), OpaqueError> {
+            server_keys: Option<&[u8]>) -> Result<(Vec<u8>, Sha512), OpaqueError> {
     if user_pwd.is_empty() { return Err(OpaqueError::EmptyPassword) };
     let sks_ptr = if let Some(sks) = server_keys {
         if sks.len() != crypto_scalarmult_SCALARBYTES as usize {
@@ -165,9 +173,9 @@ pub fn register(user_pwd: &[u8], cfg: &PkgConfig, ids: (&[u8], &[u8]),
     };
     let mut ids_mut = Ids { usr: Id::from_user(ids.0), srv: Id::from_user(ids.1) };
     let env_user_len = envelope_len(cfg, &mut ids_mut)?;
+    let mut export_key = [0u8; crypto_hash_sha512_BYTES as usize];
     unsafe {
         let mut rec = vec_for_ffi(ffi::OPAQUE_USER_RECORD_LEN + env_user_len);
-        let mut export_key = vec_for_ffi(crypto_hash_sha512_BYTES as usize);
         if ffi::opaque_Register(user_pwd.as_ptr(), user_pwd.len() as u16,
                 sks_ptr, &cfg.into(), &ids_mut.to_ffi_mut()?, rec.as_mut_ptr(),
                 export_key.as_mut_ptr()) == 0 {
@@ -178,11 +186,11 @@ pub fn register(user_pwd: &[u8], cfg: &PkgConfig, ids: (&[u8], &[u8]),
     }
 }
 
-pub fn create_credential_request(user_pwd: &[u8]) -> Result<(Vec<u8>, Vec<u8>), OpaqueError> {
+pub fn create_credential_request(user_pwd: &[u8]) -> Result<(SessionPublic, Vec<u8>), OpaqueError> {
     if user_pwd.is_empty() { return Err(OpaqueError::EmptyPassword) };
+    let mut pub_ = [0u8; ffi::OPAQUE_USER_SESSION_PUBLIC_LEN];
     unsafe {
         let mut sec  = vec_for_ffi(ffi::OPAQUE_USER_SESSION_SECRET_LEN + user_pwd.len());
-        let mut pub_ = vec_for_ffi(ffi::OPAQUE_USER_SESSION_PUBLIC_LEN);
             if ffi::opaque_CreateCredentialRequest(user_pwd.as_ptr(), user_pwd.len() as u16,
                                      sec.as_mut_ptr(), pub_.as_mut_ptr()) != 0 {
             return Err(OpaqueError::LibraryError);
@@ -193,7 +201,7 @@ pub fn create_credential_request(user_pwd: &[u8]) -> Result<(Vec<u8>, Vec<u8>), 
 
 pub fn create_credential_response(pub_: &[u8], rec: &[u8], cfg: &PkgConfig,
                               ids: (&[u8], &[u8]), infos: Option<()>
-                              ) -> Result<(Vec<u8>, Vec<u8>, Vec<u8>), OpaqueError> {
+                              ) -> Result<(Vec<u8>, OpaqueSharedSecret, Vec<u8>), OpaqueError> {
     if pub_.len() != ffi::OPAQUE_USER_SESSION_PUBLIC_LEN as usize {
         return Err(OpaqueError::InvalidParameterLength("pub"));
     }
@@ -205,9 +213,9 @@ pub fn create_credential_response(pub_: &[u8], rec: &[u8], cfg: &PkgConfig,
     let infos_ptr: *const ffi::Opaque_App_Infos = if let Some(i) = infos {
         panic!("not implemented for now")
     } else { std::ptr::null() };
+    let mut sk = [0u8; ffi::OPAQUE_SHARED_SECRETBYTES];
     unsafe {
         let mut resp = vec_for_ffi(ffi::OPAQUE_SERVER_SESSION_LEN + env_user_len);
-        let mut sk = vec_for_ffi(ffi::OPAQUE_SHARED_SECRETBYTES);
         let mut sec = vec_for_ffi(ffi::opaque_server_auth_ctx_len());
         if ffi::opaque_CreateCredentialResponse(pub_.as_ptr(), rec.as_ptr(),
                 &ids_mut.to_ffi_mut()?, infos_ptr, resp.as_mut_ptr(), sk.as_mut_ptr(),
@@ -220,7 +228,7 @@ pub fn create_credential_response(pub_: &[u8], rec: &[u8], cfg: &PkgConfig,
 }
 
 pub fn recover_credentials(resp: &[u8], sec: &[u8], cfg: &RecoverConfig, infos: Option<()>,
-                       ) -> Result<(Vec<u8>, Vec<u8>, Vec<u8>, (Vec<u8>, Vec<u8>)),
+                       ) -> Result<(OpaqueSharedSecret, HmacSha512, Sha512, (Vec<u8>, Vec<u8>)),
                                    OpaqueError> {
     if resp.len() <= ffi::OPAQUE_SERVER_SESSION_LEN {
         return Err(OpaqueError::InvalidParameterLength("resp"));
@@ -241,10 +249,10 @@ pub fn recover_credentials(resp: &[u8], sec: &[u8], cfg: &RecoverConfig, infos: 
         panic!("not implemented for now")
     } else { std::ptr::null() };
     let pcfg: PkgConfig = cfg.into();
+    let mut sk = OpaqueSharedSecret::default();
+    let mut auth_user = [0u8; crypto_auth_hmacsha512_BYTES as usize];
+    let mut export_key = [0u8; crypto_hash_sha512_BYTES as usize];
     unsafe {
-        let mut sk = vec_for_ffi(ffi::OPAQUE_SHARED_SECRETBYTES);
-        let mut auth_user = vec_for_ffi(crypto_auth_hmacsha512_BYTES as usize);
-        let mut export_key = vec_for_ffi(crypto_hash_sha512_BYTES as usize);
         let mut ids_ptr = ids1.to_ffi_mut()?;
         if ffi::opaque_RecoverCredentials(resp.as_ptr(), sec.as_ptr(),
                     pk_ptr, &(&pcfg).into(), infos_ptr, &mut ids_ptr,
@@ -272,11 +280,11 @@ pub fn user_auth(sec_srv: &[u8], auth_user: &[u8]) -> Result<(), OpaqueError> {
     }
 }
 
-pub fn create_registration_request(user_pwd: &[u8]) -> Result<(Vec<u8>, Vec<u8>), OpaqueError> {
+pub fn create_registration_request(user_pwd: &[u8]) -> Result<(Vec<u8>, RegistrationRequestM), OpaqueError> {
     if user_pwd.is_empty() { return Err(OpaqueError::EmptyPassword) };
+    let mut m = RegistrationRequestM::default();
     unsafe {
         let mut sec = vec_for_ffi(ffi::OPAQUE_REGISTER_USER_SEC_LEN + user_pwd.len());
-        let mut m = vec_for_ffi(crypto_core_ristretto255_BYTES as usize);
         if ffi::opaque_CreateRegistrationRequest(user_pwd.as_ptr(),
                                                  user_pwd.len() as u16,
                                                  sec.as_mut_ptr(),
@@ -288,13 +296,13 @@ pub fn create_registration_request(user_pwd: &[u8]) -> Result<(Vec<u8>, Vec<u8>)
     }
 }
 
-pub fn create_registration_response(m: &[u8], pk_srv: Option<&[u8]>) -> Result<(Vec<u8>, Vec<u8>), OpaqueError> {
+pub fn create_registration_response(m: &[u8], pk_srv: Option<&[u8]>) -> Result<(RegisterSecret, RegisterPublic), OpaqueError> {
     if m.len() != crypto_core_ristretto255_BYTES as usize {
         return Err(OpaqueError::InvalidParameterLength("m"));
     }
+    let mut sec  = [0u8; ffi::OPAQUE_REGISTER_SECRET_LEN];
+    let mut pub_ = [0u8; ffi::OPAQUE_REGISTER_PUBLIC_LEN];
     unsafe {
-        let mut sec  = vec_for_ffi(ffi::OPAQUE_REGISTER_SECRET_LEN);
-        let mut pub_ = vec_for_ffi(ffi::OPAQUE_REGISTER_PUBLIC_LEN);
         let result = if let Some(k) = pk_srv {
             if k.len() != crypto_scalarmult_BYTES as usize {
                 return Err(OpaqueError::InvalidParameterLength("pk_srv"));
@@ -314,7 +322,7 @@ pub fn create_registration_response(m: &[u8], pk_srv: Option<&[u8]>) -> Result<(
 }
 
 pub fn finalize_request(sec: &[u8], pub_: &[u8], cfg: &PkgConfig,
-                    ids: (&[u8], &[u8])) -> Result<(Vec<u8>, Vec<u8>), OpaqueError> {
+                    ids: (&[u8], &[u8])) -> Result<(Vec<u8>, Sha512), OpaqueError> {
     if sec.len() <= ffi::OPAQUE_REGISTER_USER_SEC_LEN {
         return Err(OpaqueError::InvalidParameterLength("sec"));
     }
@@ -323,9 +331,9 @@ pub fn finalize_request(sec: &[u8], pub_: &[u8], cfg: &PkgConfig,
     }
     let mut ids_mut = Ids { usr: Id::from_user(ids.0), srv: Id::from_user(ids.1) };
     let env_user_len = envelope_len(cfg, &mut ids_mut)?;
+    let mut export_key = [0u8; crypto_hash_sha512_BYTES as usize];
     unsafe {
         let mut rec = vec_for_ffi(ffi::OPAQUE_USER_RECORD_LEN + env_user_len);
-        let mut export_key = vec_for_ffi(crypto_hash_sha512_BYTES as usize);
         if ffi::opaque_FinalizeRequest(
             sec.as_ptr(), pub_.as_ptr(), &cfg.into(), &ids_mut.to_ffi_mut()?,
             rec.as_mut_ptr(), export_key.as_mut_ptr()) == 0 {
