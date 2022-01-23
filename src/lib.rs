@@ -475,7 +475,7 @@ mod tests {
     const USER_PWD: &[u8; 36] = b"simple guessable dictionary password";
 
     #[test]
-    fn simple() {
+    fn simple() -> Result<(), OpaqueError> {
         let ids = ("user".as_bytes(), "server".as_bytes());
         let ise = PkgConfigValue::InSecEnv;
         let cfg = PkgConfig {
@@ -488,14 +488,14 @@ mod tests {
         };
 
         {
-            let (rec, export_key) = register(USER_PWD, &cfg, ids, None).expect("register");
-            let (pub_, sec_user) = create_credential_request(USER_PWD).expect("ccreq");
+            let (rec, export_key) = register(USER_PWD, &cfg, ids, None)?;
+            let (pub_, sec_user) = create_credential_request(USER_PWD)?;
             let (resp, sk, sec_srv) =
-                create_credential_response(&pub_, &rec, &cfg, ids, None).expect("ccresp");
+                create_credential_response(&pub_, &rec, &cfg, ids, None)?;
             let (sk1, auth_user, export_key1, ids1) =
-                recover_credentials(&resp, &sec_user, &recfg, None).expect("recover");
+                recover_credentials(&resp, &sec_user, &recfg, None)?;
 
-            user_auth(&sec_srv, &auth_user).expect("user_auth");
+            user_auth(&sec_srv, &auth_user)?;
 
             assert_eq!(ids.0, ids1.0);
             assert_eq!(ids.1, ids1.1);
@@ -504,27 +504,29 @@ mod tests {
         }
 
         {
-            let (sec_usr, m) = create_registration_request(USER_PWD).expect("crrq");
-            let (sec_srv, pub_) = create_registration_response(&m, None).expect("crrs");
-            let (rec, export_key) = finalize_request(&sec_usr, &pub_, &cfg, ids).expect("fr");
-            let rec = store_user_record(&sec_srv, &rec, None).expect("sur");
-            let (pub_, sec_user) = create_credential_request(USER_PWD).expect("ccreq");
+            let (sec_usr, m) = create_registration_request(USER_PWD)?;
+            let (sec_srv, pub_) = create_registration_response(&m, None)?;
+            let (rec, export_key) = finalize_request(&sec_usr, &pub_, &cfg, ids)?;
+            let rec = store_user_record(&sec_srv, &rec, None)?;
+            let (pub_, sec_user) = create_credential_request(USER_PWD)?;
             let (resp, sk, sec_srv) =
-                create_credential_response(&pub_, &rec, &cfg, ids, None).expect("ccresp");
+                create_credential_response(&pub_, &rec, &cfg, ids, None)?;
             let (sk1, auth_user, export_key1, ids1) =
-                recover_credentials(&resp, &sec_user, &recfg, None).expect("recover");
+                recover_credentials(&resp, &sec_user, &recfg, None)?;
 
-            user_auth(&sec_srv, &auth_user).expect("user_auth");
+            user_auth(&sec_srv, &auth_user)?;
 
             assert_eq!(ids.0, ids1.0);
             assert_eq!(ids.1, ids1.1);
             assert_eq!(export_key, export_key1);
             assert_eq!(sk, sk1);
         }
+
+        Ok(())
     }
 
     #[test]
-    fn register_with_global_server_key() {
+    fn register_with_global_server_key() -> Result<(), OpaqueError> {
         use core::ffi::c_void;
         use libsodium_sys::{crypto_scalarmult_curve25519_base, randombytes_buf};
 
@@ -540,13 +542,13 @@ mod tests {
             crypto_scalarmult_curve25519_base(pk_srv.as_mut_ptr(), sk_srv.as_ptr());
             (sk_srv, pk_srv)
         };
-        let (sec_usr, m) = create_registration_request(USER_PWD).expect("crrq");
-        let (sec_srv, pub_) = create_registration_response(&m, Some(&pk_srv)).expect("crrs");
-        let (rec, export_key) = finalize_request(&sec_usr, &pub_, &cfg, ids).expect("fr");
-        let rec = store_user_record(&sec_srv, &rec, Some(&sk_srv)).expect("sur");
-        let (pub_, sec_usr) = create_credential_request(USER_PWD).expect("ccreq");
+        let (sec_usr, m) = create_registration_request(USER_PWD)?;
+        let (sec_srv, pub_) = create_registration_response(&m, Some(&pk_srv))?;
+        let (rec, export_key) = finalize_request(&sec_usr, &pub_, &cfg, ids)?;
+        let rec = store_user_record(&sec_srv, &rec, Some(&sk_srv))?;
+        let (pub_, sec_usr) = create_credential_request(USER_PWD)?;
         let (resp, sk, sec_srv) =
-            create_credential_response(&pub_, &rec, &cfg, ids, None).expect("ccresp");
+            create_credential_response(&pub_, &rec, &cfg, ids, None)?;
 
         let recfg = RecoverConfig {
             sk_usr: cfg.sk_usr,
@@ -557,12 +559,14 @@ mod tests {
         };
 
         let (sk1, auth_user, export_key1, ids1) =
-            recover_credentials(&resp, &sec_usr, &recfg, None).expect("recover");
-        user_auth(&sec_srv, &auth_user).expect("user_auth");
+            recover_credentials(&resp, &sec_usr, &recfg, None)?;
+        user_auth(&sec_srv, &auth_user)?;
 
         assert_eq!(ids.0, ids1.0);
         assert_eq!(ids.1, ids1.1);
         assert_eq!(export_key, export_key1);
         assert_eq!(sk, sk1);
+
+        Ok(())
     }
 }
