@@ -231,12 +231,22 @@ pub fn create_credential_request(user_pwd: &[u8]) -> Result<(SessionPublic, Vec<
     }
 }
 
+fn tuple_to_info(value: Option<(&[u8], &[u8])>) -> Option<ffi::Opaque_App_Infos> {
+    let (info, einfo) = value?;
+    Some(ffi::Opaque_App_Infos {
+        info: info.as_ptr(),
+        info_len: info.len() as u64,
+        einfo: einfo.as_ptr(),
+        einfo_len: einfo.len() as u64,
+    })
+}
+
 pub fn create_credential_response(
     pub_: &[u8],
     rec: &[u8],
     cfg: &PkgConfig,
     ids: (&[u8], &[u8]),
-    infos: Option<()>,
+    infos: Option<(&[u8], &[u8])>,
 ) -> Result<(Vec<u8>, OpaqueSharedSecret, Vec<u8>), OpaqueError> {
     if pub_.len() != ffi::OPAQUE_USER_SESSION_PUBLIC_LEN as usize {
         return Err(OpaqueError::InvalidParameterLength("pub"));
@@ -249,8 +259,9 @@ pub fn create_credential_response(
     if rec.len() != ffi::OPAQUE_USER_RECORD_LEN + env_user_len {
         return Err(OpaqueError::InvalidParameterLength("rec"));
     }
-    let infos_ptr: *const ffi::Opaque_App_Infos = if let Some(i) = infos {
-        panic!("not implemented for now")
+    let infos_ffi = tuple_to_info(infos);
+    let infos_ptr: *const ffi::Opaque_App_Infos = if let Some(i) = infos_ffi {
+        &i
     } else {
         std::ptr::null()
     };
@@ -279,7 +290,7 @@ pub fn recover_credentials(
     resp: &[u8],
     sec: &[u8],
     cfg: &RecoverConfig,
-    infos: Option<()>,
+    infos: Option<(&[u8], &[u8])>,
 ) -> Result<(OpaqueSharedSecret, HmacSha512, Sha512, (Vec<u8>, Vec<u8>)), OpaqueError> {
     if resp.len() <= ffi::OPAQUE_SERVER_SESSION_LEN {
         return Err(OpaqueError::InvalidParameterLength("resp"));
@@ -298,8 +309,9 @@ pub fn recover_credentials(
         usr: cfg.id_usr.into(),
         srv: cfg.id_srv.into(),
     };
-    let infos_ptr: *const ffi::Opaque_App_Infos = if let Some(i) = infos {
-        panic!("not implemented for now")
+    let infos_ffi = tuple_to_info(infos);
+    let infos_ptr: *const ffi::Opaque_App_Infos = if let Some(i) = infos_ffi {
+        &i
     } else {
         std::ptr::null()
     };
