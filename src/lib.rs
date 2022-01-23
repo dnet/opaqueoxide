@@ -581,4 +581,43 @@ mod tests {
 
         Ok(())
     }
+
+    #[test]
+    fn erlang_tests() -> Result<(), OpaqueError> {
+        let ids = ("idU".as_bytes(), "idS".as_bytes());
+        let np = PkgConfigValue::NotPackaged;
+        let ise = PkgConfigValue::InSecEnv;
+        let cfg = PkgConfig {
+            sk_usr: ise, pk_usr: np, pk_srv: np, id_usr: ise, id_srv: ise,
+        };
+        let sk_srv: Vec<u8> = (0..32).collect();
+        register(b"asdf", &cfg, ids, None)?;
+        let (rec, export_key) = register(b"asdf", &cfg, ids, Some(&sk_srv))?;
+        let infos: (&[u8], &[u8]) = (
+            "\x00\x01\x02\x03\x04".as_bytes(),
+            "\x05\x06\x07\x08".as_bytes(),
+            );
+        let (pub_, sec_usr) = create_credential_request(b"asdf")?;
+        let (resp, sk, sec_srv) = create_credential_response(&pub_, &rec, &cfg, ids, Some(infos))?;
+
+        let pk_srv = b"\x8f\x40\xc5\xad\xb6\x8f\x25\x62\x4a\xe5\xb2\x14\xea\x76\x7a\x6e\xc9\x4d\x82\x9d\x3d\x7b\x5e\x1a\xd1\xba\x6f\x3e\x21\x38\x28\x5f";
+        let recfg = RecoverConfig {
+            sk_usr: cfg.sk_usr,
+            pk_usr: cfg.pk_usr,
+            pk_srv: RecoverConfigValue::NotPackaged(pk_srv),
+            id_usr: RecoverConfigValue::InSecEnv,
+            id_srv: RecoverConfigValue::InSecEnv,
+        };
+
+        let (sk1, auth_user, export_key1, ids1) =
+            recover_credentials(&resp, &sec_usr, &recfg, Some(infos))?;
+        user_auth(&sec_srv, &auth_user)?;
+
+        assert_eq!(ids.0, ids1.0);
+        assert_eq!(ids.1, ids1.1);
+        assert_eq!(export_key, export_key1);
+        assert_eq!(sk, sk1);
+
+        Ok(())
+    }
 }
