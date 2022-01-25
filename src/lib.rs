@@ -192,8 +192,8 @@ pub fn register(
     };
     let env_user_len = envelope_len(cfg, &mut ids_mut)?;
     let mut export_key = [0u8; crypto_hash_sha512_BYTES as usize];
+    let mut rec = vec![0u8; ffi::OPAQUE_USER_RECORD_LEN + env_user_len];
     unsafe {
-        let mut rec = vec_for_ffi(ffi::OPAQUE_USER_RECORD_LEN + env_user_len);
         if ffi::opaque_Register(
             user_pwd.as_ptr(),
             user_pwd.len() as u16,
@@ -216,8 +216,8 @@ pub fn create_credential_request(user_pwd: &[u8]) -> Result<(SessionPublic, Vec<
         return Err(OpaqueError::EmptyPassword);
     };
     let mut pub_ = [0u8; ffi::OPAQUE_USER_SESSION_PUBLIC_LEN];
+    let mut sec = vec![0u8; ffi::OPAQUE_USER_SESSION_SECRET_LEN + user_pwd.len()];
     unsafe {
-        let mut sec = vec_for_ffi(ffi::OPAQUE_USER_SESSION_SECRET_LEN + user_pwd.len());
         if ffi::opaque_CreateCredentialRequest(
             user_pwd.as_ptr(),
             user_pwd.len() as u16,
@@ -266,9 +266,9 @@ pub fn create_credential_response(
         std::ptr::null()
     };
     let mut sk = [0u8; ffi::OPAQUE_SHARED_SECRETBYTES];
+    let mut resp = vec![0u8; ffi::OPAQUE_SERVER_SESSION_LEN + env_user_len];
+    let mut sec = vec![0u8; ffi::opaque_server_auth_ctx_len()];
     unsafe {
-        let mut resp = vec_for_ffi(ffi::OPAQUE_SERVER_SESSION_LEN + env_user_len);
-        let mut sec = vec_for_ffi(ffi::opaque_server_auth_ctx_len());
         if ffi::opaque_CreateCredentialResponse(
             pub_.as_ptr(),
             rec.as_ptr(),
@@ -361,8 +361,8 @@ pub fn create_registration_request(
         return Err(OpaqueError::EmptyPassword);
     };
     let mut m = RegistrationRequestM::default();
+    let mut sec = vec![0u8; ffi::OPAQUE_REGISTER_USER_SEC_LEN + user_pwd.len()];
     unsafe {
-        let mut sec = vec_for_ffi(ffi::OPAQUE_REGISTER_USER_SEC_LEN + user_pwd.len());
         if ffi::opaque_CreateRegistrationRequest(
             user_pwd.as_ptr(),
             user_pwd.len() as u16,
@@ -426,8 +426,8 @@ pub fn finalize_request(
     };
     let env_user_len = envelope_len(cfg, &mut ids_mut)?;
     let mut export_key = [0u8; crypto_hash_sha512_BYTES as usize];
+    let mut rec = vec![0u8; ffi::OPAQUE_USER_RECORD_LEN + env_user_len];
     unsafe {
-        let mut rec = vec_for_ffi(ffi::OPAQUE_USER_RECORD_LEN + env_user_len);
         if ffi::opaque_FinalizeRequest(
             sec.as_ptr(),
             pub_.as_ptr(),
@@ -471,12 +471,6 @@ pub fn store_user_record(
 
 fn envelope_len(cfg: &PkgConfig, ids: &mut Ids) -> Result<usize, TryFromIntError> {
     Ok(unsafe { ffi::opaque_envelope_len(&cfg.into(), &ids.to_ffi_mut()?) as usize })
-}
-
-unsafe fn vec_for_ffi(length: usize) -> Vec<u8> {
-    let mut v: Vec<u8> = Vec::with_capacity(length);
-    v.set_len(length);
-    v
 }
 
 #[cfg(test)]
